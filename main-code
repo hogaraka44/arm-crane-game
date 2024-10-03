@@ -25,8 +25,8 @@ Servo myServoarm;
 Servo myServog;
 Servo myServoh;
 
-char ssid[]="Buffalo-2G-OE10";
-char pass[]="46tkdugy8r54n";
+char ssid[]="id";
+char pass[]="pass";
 
 float sliderValueB=0;
 int sliderValueArm=0;
