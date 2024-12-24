@@ -1,5 +1,3 @@
-
-
 //#include "audiodata.h"  // wav data with header 
 
 #include <math.h>
@@ -8,31 +6,28 @@
 
 #define SERVOh_PIN 27
 #define SERVOarm_PIN 14
-#define SERVOg_PIN 12 //もともと25だった
+#define SERVOg_PIN 12 
 #define SERVOb_PIN 13
 
 #define P_PIN 16
-#define L_PIN 17//動作します
-#define R_PIN 5//動作します
+#define L_PIN 17
+#define R_PIN 5
 #define U_PIN 18
 #define D_PIN 19
 
 
-#define POTENTIOMLArm_PIN 35//うごいた
-#define POTENTIOMHArm_PIN 32//なぜかあんていしない。べつのスイッチ用意
+#define POTENTIOMLArm_PIN 34
+#define POTENTIOMHArm_PIN 32
 
-#define POTENTIOMHGraund_PIN 22//21ならデジタルピンが動く。21,24ならアナログピンが動く
-#define POTENTIOMLGraund_PIN 23//26しんでる。デジタルピンが動く。
+#define POTENTIOMHGraund_PIN 22
+#define POTENTIOMLGraund_PIN 23
 
-#define BUTTON_PIN 26//21
+#define BUTTON_PIN 26
 
 Servo myServoB;
 Servo myServoarm;
 Servo myServoG;
 Servo myServoH;
-
-//char ssid[]="takumi-kentaro";                                                                                                                                                                   
-//char pass[]="k0Ken-11235";
 
 int sliderValueArm=0;
 int oldsliderValueArm = 0;
@@ -51,11 +46,13 @@ enum State
     set1,
     //contB,
     contA,
+    //cont2,
     auto1,
     auto2,
     auto3,
     auto4,
     auto5,
+    auto6,
     reset1,
    
 };
@@ -67,6 +64,18 @@ int count = 0;
 void Debug(){
   Serial.print("nowstate ");Serial.println(state);
   Serial.print("BUTTON_PIN ");Serial.println(digitalRead(BUTTON_PIN));
+  Serial.print("BUTTON_PIN ");Serial.println(analogRead(BUTTON_PIN));
+  Serial.print("POTENTIOMHArm_PIN ");Serial.println(digitalRead(POTENTIOMHArm_PIN));
+  Serial.print("POTENTIOMLArm_PIN ");Serial.println(analogRead(POTENTIOMHArm_PIN));
+
+  Serial.print("POTENTIOMLArm_PIN ");Serial.println(digitalRead(POTENTIOMLArm_PIN));
+  Serial.print("POTENTIOMLArm_PIN ");Serial.println(analogRead(POTENTIOMLArm_PIN));
+
+  Serial.print("POTENTIOMLGrand_PIN ");Serial.println(digitalRead(POTENTIOMLGraund_PIN));
+  Serial.print("POTENTIOMLGrand_PIN ");Serial.println(analogRead(POTENTIOMLGraund_PIN));
+   Serial.print("POTENTIOMHGrand_PIN ");Serial.println(digitalRead(POTENTIOMHGraund_PIN));
+  Serial.print("POTENTIOMHGrand_PIN ");Serial.println(analogRead(POTENTIOMHGraund_PIN));
+
   Serial.print("Lpin");Serial.println(digitalRead(L_PIN));
   Serial.print("Rpin");Serial.println(digitalRead(R_PIN));
   Serial.print("sliderValueB ");Serial.println(sliderValueB);
@@ -85,7 +94,6 @@ void setup() {
   myServoarm.attach(SERVOarm_PIN);
   myServoG.attach(SERVOg_PIN);
   myServoH.attach(SERVOh_PIN);
-  //Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
   pinMode(POTENTIOMLArm_PIN,INPUT);
   pinMode(POTENTIOMHArm_PIN,INPUT);
   pinMode(POTENTIOMLGraund_PIN,INPUT);
@@ -98,13 +106,129 @@ void setup() {
   pinMode(BUTTON_PIN,INPUT);
 }
 
-//ベース、グラウンド、アームコントロールするのは全部このステート
-int lowNum = 0;
-int ButtonNumG = 0;
-void ContA(){
 
-  //Serial.print("BUTTON_PIN ");Serial.println(digitalRead(BUTTON_PIN));
+int HIGHNumG = 0;
+void Auto1(){//grandサーボで前に行く
 
+  if(digitalRead(POTENTIOMHGraund_PIN) == LOW){
+
+    HIGHNumG--;
+    myServoG.write(80); // forward
+    
+    if(HIGHNumG <=0){HIGHNumG = 0;}
+  
+  }else{
+    HIGHNumG ++;
+    if(HIGHNumG >= 10){HIGHNumG =0; state = auto2;}
+  }
+  
+}
+
+void Auto2(){//hand部分を回転させつかむ
+  sliderValueHN+=0.02;
+  if(sliderValueHN <= 180){
+    myServoH.write(sliderValueHN); // forward;
+  }
+  else{
+    delay(1000);
+    state = auto3;
+  }
+}
+
+void Auto3(){//arm部分を後ろにいかせる モーター故障中
+  /*
+  //メーターが上限に達したら
+  if((digitalRead(POTENTIOMLArm_PIN) == HIGH || analogRead(POTENTIOMLArm_PIN) >= 400)){ //POTENTIOMLArm_PINだった
+    state = auto4;//安定動作
+  }
+
+  else{
+     myServoarm.write(105); //back;
+  }
+  */
+
+  state = auto4;//安定動作
+}
+
+
+void Auto4(){//grand部分を後ろにいかせる
+  //メーターが上限に達したら
+  if(digitalRead(POTENTIOMLGraund_PIN) == HIGH|| analogRead(POTENTIOMLGraund_PIN) >= 500){ 
+  //if(digitalRead(POTENTIOMHGraund_PIN) || analogRead(POTENTIOMHGraund_PIN) >= 4000){ 
+    state = auto5;//安定動作
+    myServoG.write(90); //back;
+    delay(1000);
+  }
+
+  else{
+     myServoG.write(100); //back;
+  }
+}
+
+void Auto5(){//根本部分を景品の方に回転させる
+
+  if(sliderValueBN <= 151){
+    sliderValueBN += 0.05;
+     myServoB.write(sliderValueBN); // forward;
+     delay(10);
+  }
+  if(sliderValueBN >= 149){
+    delay(2000);
+    state = auto6;
+  }
+}
+
+unsigned long time0 =0;
+unsigned long time1 =0;
+
+
+void Auto6(){//hand部分を回転させはなす
+
+  sliderValueHN-=0.05;
+
+    myServoH.write(0); //はなす
+    delay(2000);
+    state = set1;
+    time0 = millis();
+
+}
+
+void Set1(){
+
+  myServoG.write(90); // stop88と87の間
+  time1 = millis();
+  if(sliderValueHN >= 0){
+    sliderValueHN = -0.1;
+    myServoH.write(sliderValueHN);
+  }
+
+  else if(sliderValueBN >= 45){
+    sliderValueBN += 0.05;
+     delay(10);
+     myServoB.write(sliderValueBN); // forward;
+  }
+
+  else if(sliderValueBN >= 45){
+    sliderValueBN -= 0.02;
+     myServoB.write(sliderValueBN); // forward;
+  }
+
+  else{
+    state = contA;
+  }
+
+  if(time1-time0 > 10000){
+    state = contA;
+  }
+
+}
+
+ 
+  int lowNum = 0;
+
+  int ButtonNumG = 0;
+  //ベース、グラウンド、アームコントロールするのは全部このステート
+  void ContA(){
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //コントローラーの値の検出
   sliderValueB = 0; 
@@ -117,27 +241,28 @@ void ContA(){
   sliderValueArm =0;  
   
   if(digitalRead(U_PIN) == HIGH){
-    sliderValueArm =+1;
+    sliderValueArm +=1;
   }
   
   if(digitalRead(D_PIN)== HIGH){
     sliderValueArm -=1;  
   }
-
+  
   if(digitalRead(P_PIN ) == LOW ){
     lowNum ++;
-    if(lowNum >= 20){lowNum =0; state = auto1;}
+    if(lowNum >= 10){lowNum =0; state = auto1;}
     
   
   }else{
     lowNum--;
     if(lowNum <=0){lowNum = 0;}
+    
   }
 
-  if(digitalRead(BUTTON_PIN) == LOW ){
-        ButtonNumG ++;
-    if(ButtonNumG >= 10){ButtonNumG =0; Serial.println(ButtonNumG);//state = auto2;//バイパス
-    }
+
+  if(analogRead(BUTTON_PIN) <= 100 ){//digitalRead(BUTTON_PIN) == LOW 
+        ButtonNumG += 2;
+    if(ButtonNumG >= 10){ButtonNumG =0; Serial.println("next");state = auto2;}
 
   //if(digitalRead(P_PIN ) == HIGH){
   
@@ -145,11 +270,6 @@ void ContA(){
   else{ButtonNumG --;
     if(ButtonNumG <=0){ButtonNumG = 0;}
   }
-
-
-  //Serial.println(analogRead(P_PIN));//安定
-
-
 
 //コントローラーの値の検出はここまで
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -165,197 +285,53 @@ void ContA(){
   }
 
   if(sliderValueB == 1){
-    sliderValueBN += 0.005;
+    sliderValueBN += 0.01;
     myServoB.write(sliderValueBN); // forward;
   }
   else if(sliderValueB == -1){
-    sliderValueBN -= 0.005;
+    sliderValueBN -= 0.01;
     myServoB.write(sliderValueBN); // forward;
   }
 //根元のサーボの制御はここまで
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
   //~~~~~~~~~~~~~~~~~~デバック用
-    //if(analogRead(POTENTIOMHArm_PIN) > 3000  || digitalRead(POTENTIOMHArm_PIN) == HIGH){  Serial.println("POTENTIOMHArm_PIN 1"); }//動作安定
-    //if(digitalRead(POTENTIOMLArm_PIN) == HIGH){  Serial.println("POTENTIOMLArm_PIN 1"); }//安定動作 
+    //if(analogRead(POTENTIOMLGraund_PIN) > 3000  || digitalRead(POTENTIOMLGraund_PIN) == HIGH){  Serial.println("L _ 1"); }//動作安定
+    //if(analogRead(POTENTIOMHGraund_PIN) > 3000  || digitalRead(POTENTIOMHGraund_PIN) == HIGH){  Serial.println("H 1"); }//動作安定
+    //if(digitalRead(POTENTIOMLGraund_PIN) == HIGH){  Serial.println("POTENTIOMLGround_PIN 1"); }//安定動作 
   
   //~~~~~~~~~~~~~~~~~~デバック用ここまで
 
 
-//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //アームのサーボの制御
+
   if(( digitalRead(POTENTIOMHArm_PIN) == HIGH || analogRead(POTENTIOMHArm_PIN) > 4000)&& sliderValueArm == 1){//メーターが上限に達していてforwordのとき
       sliderValueArm = 0;
-    //}
   }
-  else if((digitalRead(POTENTIOMLArm_PIN) == HIGH || analogRead(POTENTIOMLArm_PIN) > 4000 )&& sliderValueArm == -1){//上限に達して、さらにforwordしているときストップ
+  else if((digitalRead(POTENTIOMLArm_PIN) == HIGH || analogRead(POTENTIOMLArm_PIN) > 400 )&& sliderValueArm == -1){//上限に達して、さらにforwordしているときストップ
       sliderValueArm = 0;
-    //}
   }                                                
   
 
   if(sliderValueArm == 1){
-    myServoarm.write(84); // forward;
-    //myServoG.write(60); //  デバック用
-    //Serial.println("servo 84");//安定
+    myServoarm.write(70); // forward;
 
   }
   else if(sliderValueArm == -1){
-    myServoarm.write(105); // back
-   // myServoG.write(120); // back
-    //Serial.println("servo 105");//安定
+   myServoarm.write(120); // back
 
   }
   else{
-    myServoarm.write(94); // stop
-    //myServoG.write(94); // stop
-    //Serial.println("servo 94");//安定
-  }
-
-//アームのサーボの制御
-//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-  /*
-  if(digitalRead(POTENTIOMHGraund_PIN) == HIGH && sliderValueG == 1){//メーターが上限に達していてforwordのとき
-    //if(sliderValueG == 1){
-      //Blynk.virtualWrite(V2,0);//sliderValueGに送信する
-      sliderValueG = 0;
-    //}
-  }
-  //digitalRead(POTENTIOMLGraund_PIN) == HIGH なら　analogRead(POTENTIOML2_PIN) > 3000になる
-  else if( (digitalRead(POTENTIOMLGraund_PIN) == HIGH  || analogRead(POTENTIOMLGraund_PIN) > 3000 )&& sliderValueG == -1){//上限に達して、さらにforword
-    //if(sliderValueG == -1){
-
-      //Blynk.virtualWrite(V2,0);//sliderValueGに送信する
-      sliderValueG = 0;
-    //}
-  }
-
-  if(sliderValueG == 1){
-    myServoG.write(60); // forward;
-    //Serial.println("servo 84");
-
-  }
-  else if(sliderValueG == -1){
-    myServoG.write(120); // back
-    //Serial.println("servo 105");
-
-  }
-  else{
-    myServoG.write(90); // stop
-    //Serial.println("servo 94");
-  }
-  */
-
-  
-
-//デバック用
-  /*if(oldsliderValueArm != sliderValueArm || oldsliderValueG != sliderValueG ){  
-    //Debug();
-  }*/
-}
-
-int HIGHNumG = 0;
-void Auto1(){//grandサーボで前に行く
-  //Serial.println("Auto1");//確認済み
-
-  //Serial.print("HIGHNumG");Serial.println(HIGHNumG);//安定
-
-
-  if(digitalRead(BUTTON_PIN) == LOW){
-
-    HIGHNumG ++;
-    if(HIGHNumG >= 10){HIGHNumG =0; state = auto2;
-    }
-  
-  }else{
-
-    HIGHNumG--;
-    myServoG.write(85); // forward
-    //デバック用
-    //delay(1000);
-    //myServoG.write(120); // forward
-    //delay(1000);
-    //Serial.println(" myServoG.write(80)");
-    //デバック用ここまで
-    if(HIGHNumG <=0){HIGHNumG = 0;}
+    myServoarm.write(92); // stop
   }
   
+//アームのサーボの制御 ここまで
 }
-
-void Auto2(){//hand部分を回転させつかむ
-  //Serial.println(sliderValueHN);//確認済み
-  sliderValueHN+=0.04;
-  Serial.println(sliderValueHN);//確認済み
-  if(sliderValueHN <= 180){
-    myServoH.write(sliderValueHN); // forward;
-  }
-  else{
-    state = auto3;
-  }
-}
-
-void Auto3(){//grand部分を後ろにいかせる
-  //メーターが上限に達したら
-  if(digitalRead(POTENTIOMLGraund_PIN) == HIGH){ 
-    state = auto4;//安定動作
-  }
-
-  else{
-     myServoG.write(120); //back;
-  }
-}
-
-void Auto4(){//根本部分を景品の方に回転させる
-  Serial.print("auto4 ");
-  Serial.println(sliderValueBN);
-
-  if(sliderValueBN <= 150){
-    sliderValueBN += 0.02;
-     myServoB.write(sliderValueBN); // forward;
-  }
-  else{
-    state = auto5;
-  }
-}
-
-void Auto5(){//hand部分を回転させはなす
-  Serial.print("auto5 ");
-  //Serial.println(sliderValueHN);
-  sliderValueHN-=0.02;
-
-  if(0 <= sliderValueHN){
-    myServoH.write(sliderValueHN); //はなす
-  }
-  else{
-    state = set1;
-  }
-
-}
-
-void Set1(){
-
-   if(sliderValueHN >= 0){
-    sliderValueHN = -0.02;
-    myServoH.write(sliderValueHN);
-  }
-
-  if(sliderValueBN >= 45){
-    sliderValueBN -= 0.02;
-     myServoB.write(sliderValueBN); // forward;
-  }
-  else{
-    state = contA;
-  }
-
-}
-
- 
- //int lowNum = 0;
- //int ButtonNumG = 0;
 
 
 void loop() {
+
 
   //デバック用~~~~~~~~~~~~~~~
   count = count + 1;
@@ -363,12 +339,14 @@ void loop() {
     Serial.println("定期");
     Debug();
   }
-  //デバック用ここまで~~~~~~~~~~~~~~~
+  //デバック用ここまで~~~~~~~~~~~~~~
 
-if(state == set1){
+
+  //ステート管理~~~~~~~~~~~~~~~~~~~
+  if(state == set1){
     Set1();
   }
-  // サーボBGAの処理
+
   if(state == contA){
     ContA();
   }
@@ -377,22 +355,28 @@ if(state == set1){
     Auto1();
   }
 
-
   if(state ==auto2){
     Auto2();
   }
 
-if(state ==auto3){
+  if(state ==auto3){
     Auto3();
   }
 
-if(state ==auto4){
+  if(state ==auto4){
     Auto4();
   }
 
-if(state ==auto5){
+  if(state ==auto5){
     Auto5();
   }
+
+  if(state ==auto6){
+    Auto6();
+  }
+  //ステート管理　ここまで~~~~~
+
+
 
 
 }
