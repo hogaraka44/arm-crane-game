@@ -1,390 +1,399 @@
-#define BLYNK_TEMPLATE_ID "TMPL6QImNv-U7"
-#define BLYNK_TEMPLATE_NAME "test"
-#define BLYNK_AUTH_TOKEN "GkqyuFhAIDeuVGWONGx3OnUVPd2eUAW6"
+
+
+//#include "audiodata.h"  // wav data with header 
 
 #include <math.h>
-#include <time.h>
 #include <ESP32Servo.h>
-#include <BlynkSimpleEsp32.h>
-#include <WiFi.h>
-#include <WiFiClient.h>
+//#include <BlynkSimpleEsp32.h>
 
-
-#define BLYNK_PRINT Serial
-
-#define SERVOb_PIN 18
-#define SERVOg_PIN 12
+#define SERVOh_PIN 27
 #define SERVOarm_PIN 14
-#define SERVOh_PIN 5
+#define SERVOg_PIN 12 //もともと25だった
+#define SERVOb_PIN 13
+
+#define P_PIN 16
+#define L_PIN 17//動作します
+#define R_PIN 5//動作します
+#define U_PIN 18
+#define D_PIN 19
 
 
-#define BUTTON_PIN 19
+#define POTENTIOMLArm_PIN 35//うごいた
+#define POTENTIOMHArm_PIN 32//なぜかあんていしない。べつのスイッチ用意
 
-Servo myServob;
+#define POTENTIOMHGraund_PIN 22//21ならデジタルピンが動く。21,24ならアナログピンが動く
+#define POTENTIOMLGraund_PIN 23//26しんでる。デジタルピンが動く。
+
+#define BUTTON_PIN 26//21
+
+Servo myServoB;
 Servo myServoarm;
-Servo myServog;
-Servo myServoh;
+Servo myServoG;
+Servo myServoH;
 
-//char ssid[]="";
-//char pass[]="";
+//char ssid[]="takumi-kentaro";                                                                                                                                                                   
+//char pass[]="k0Ken-11235";
 
-
-float sliderValueB=0;
 int sliderValueArm=0;
+int oldsliderValueArm = 0;
+
+int sliderValueH=0;//
+float sliderValueHN=0;//int sliderValueHの実際の回転角
+
+int sliderValueB=0;
+float sliderValueBN=0;
 int sliderValueG=0;
-int sliderValueG2=0;
-int sliderValueH=0;
+
+int metercounterG = 0;
 
 enum State
 {
-    set,
-    touch0,
-    touch1,
-    touch2,
+    set1,
+    //contB,
+    contA,
     auto1,
     auto2,
     auto3,
     auto4,
+    auto5,
     reset1,
-    //reset2,
-    //back 
-    
+   
 };
 
-int state;
-//unsigned long time;
-float touchtime = 20;
-float rot0 = 0;
-float rot1time = 0;
-bool rot1Max = false;
-bool rot1min = false;
-bool rot2Max = false;
-bool rot2min = false;
-unsigned long rot2time = 0;
-unsigned long rot3time = 0;
-unsigned long beforetime = 0;
-
+int state = contA;
 int count = 0;
 
-void Nowstate(){
-   Serial.println(String(count));
-    Serial.println("state is "+String(state));
-    Serial.println("rot1time is "+String(rot1time));
-    Serial.println("rot2time is "+String(rot2time));
-    Serial.println("rot3time is "+String(rot3time));
-    rot0 = 0;
-    rot1time = 0;
-    rot2time = 0;
-    rot3time = 0;
-    
+
+void Debug(){
+  Serial.print("nowstate ");Serial.println(state);
+  Serial.print("BUTTON_PIN ");Serial.println(digitalRead(BUTTON_PIN));
+  Serial.print("Lpin");Serial.println(digitalRead(L_PIN));
+  Serial.print("Rpin");Serial.println(digitalRead(R_PIN));
+  Serial.print("sliderValueB ");Serial.println(sliderValueB);
+  Serial.print("sliderValueBN ");Serial.println(sliderValueBN);
+  Serial.print("sliderValueArm ");Serial.println(sliderValueArm);
+  Serial.print("sliderValueH ");Serial.println(sliderValueH);
+  Serial.print("sliderValueHN ");Serial.println(sliderValueHN);
+  Serial.print("Upin");Serial.println(digitalRead(U_PIN));
+  Serial.print("Dpin");Serial.println(digitalRead(D_PIN));
+  Serial.print("Ppin");Serial.println(digitalRead(P_PIN));
 }
 
 void setup() {
   Serial.begin(115200);
-  
-  Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
-  Serial.println("connected");
-  pinMode(BUTTON_PIN,INPUT);
-
-  myServob.attach(SERVOb_PIN);
+  myServoB.attach(SERVOb_PIN);
   myServoarm.attach(SERVOarm_PIN);
-  myServog.attach(SERVOg_PIN);
-  myServoh.attach(SERVOh_PIN);
-
-  state = set;
-  Nowstate();
+  myServoG.attach(SERVOg_PIN);
+  myServoH.attach(SERVOh_PIN);
+  //Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
+  pinMode(POTENTIOMLArm_PIN,INPUT);
+  pinMode(POTENTIOMHArm_PIN,INPUT);
+  pinMode(POTENTIOMLGraund_PIN,INPUT);
+  pinMode(POTENTIOMHGraund_PIN,INPUT);
+  pinMode(L_PIN,INPUT);
+  pinMode(R_PIN,INPUT);
+  pinMode(U_PIN,INPUT);
+  pinMode(D_PIN,INPUT);
+  pinMode(P_PIN,INPUT);
+  pinMode(BUTTON_PIN,INPUT);
 }
 
+//ベース、グラウンド、アームコントロールするのは全部このステート
+int lowNum = 0;
+int ButtonNumG = 0;
+void ContA(){
 
-void Touch0(){
-   if(sliderValueB == 1){
-    rot0 = rot0 + 0.01;
-    myServob.write(rot0);
-    //rot0 += 1;
-   }
-   if(sliderValueB == -1){
-    rot0 = rot0 - 0.01;
-    myServob.write(rot0);
-    //rot0 -= 1;
-   }
+  //Serial.print("BUTTON_PIN ");Serial.println(digitalRead(BUTTON_PIN));
 
-  if( rot0 <= 1){//bサーボを止める
-    myServob.write(1);
-    rot0 = 1;
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//コントローラーの値の検出
+  sliderValueB = 0; 
+  if(digitalRead(L_PIN)== HIGH){
+    sliderValueB -=1;
   }
-  if( rot0 >= 180){//bサーボを止める
-    myServob.write(180);
-    rot0 = 180;
+  if(digitalRead(R_PIN)== HIGH){
+    sliderValueB +=1;
   }
-}
+  sliderValueArm =0;  
+  
+  if(digitalRead(U_PIN) == HIGH){
+    sliderValueArm =+1;
+  }
+  
+  if(digitalRead(D_PIN)== HIGH){
+    sliderValueArm -=1;  
+  }
 
-void Touch1(){
-  if(rot1time >= 50000){
-    rot1time = 50000;
-    rot1Max = true;
+  if(digitalRead(P_PIN ) == LOW ){
+    lowNum ++;
+    if(lowNum >= 20){lowNum =0; state = auto1;}
+    
+  
+  }else{
+    lowNum--;
+    if(lowNum <=0){lowNum = 0;}
   }
-  else if(rot1time <= 0){
-    rot1time = 0;
-    rot1min = true;
+
+  if(digitalRead(BUTTON_PIN) == LOW ){
+        ButtonNumG ++;
+    if(ButtonNumG >= 10){ButtonNumG =0; Serial.println(ButtonNumG);//state = auto2;//バイパス
+    }
+
+  //if(digitalRead(P_PIN ) == HIGH){
+  
+  }
+  else{ButtonNumG --;
+    if(ButtonNumG <=0){ButtonNumG = 0;}
+  }
+
+
+  //Serial.println(analogRead(P_PIN));//安定
+
+
+
+//コントローラーの値の検出はここまで
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//根元のサーボの制御
+  if(sliderValueBN < 1  ){
+    sliderValueBN = 1;
+  }
+  else if(90 <= sliderValueBN){
+    sliderValueBN = 90;
+  }
+
+  if(sliderValueB == 1){
+    sliderValueBN += 0.005;
+    myServoB.write(sliderValueBN); // forward;
+  }
+  else if(sliderValueB == -1){
+    sliderValueBN -= 0.005;
+    myServoB.write(sliderValueBN); // forward;
+  }
+//根元のサーボの制御はここまで
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+  //~~~~~~~~~~~~~~~~~~デバック用
+    //if(analogRead(POTENTIOMHArm_PIN) > 3000  || digitalRead(POTENTIOMHArm_PIN) == HIGH){  Serial.println("POTENTIOMHArm_PIN 1"); }//動作安定
+    //if(digitalRead(POTENTIOMLArm_PIN) == HIGH){  Serial.println("POTENTIOMLArm_PIN 1"); }//安定動作 
+  
+  //~~~~~~~~~~~~~~~~~~デバック用ここまで
+
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//アームのサーボの制御
+  if(( digitalRead(POTENTIOMHArm_PIN) == HIGH || analogRead(POTENTIOMHArm_PIN) > 4000)&& sliderValueArm == 1){//メーターが上限に達していてforwordのとき
+      sliderValueArm = 0;
+    //}
+  }
+  else if((digitalRead(POTENTIOMLArm_PIN) == HIGH || analogRead(POTENTIOMLArm_PIN) > 4000 )&& sliderValueArm == -1){//上限に達して、さらにforwordしているときストップ
+      sliderValueArm = 0;
+    //}
+  }                                                
+  
+
+  if(sliderValueArm == 1){
+    myServoarm.write(84); // forward;
+    //myServoG.write(60); //  デバック用
+    //Serial.println("servo 84");//安定
+
+  }
+  else if(sliderValueArm == -1){
+    myServoarm.write(105); // back
+   // myServoG.write(120); // back
+    //Serial.println("servo 105");//安定
+
   }
   else{
-    rot1Max = false;
-    rot1min = false;
-
+    myServoarm.write(94); // stop
+    //myServoG.write(94); // stop
+    //Serial.println("servo 94");//安定
   }
 
-  if(rot1Max == false  && rot1min == false){
-    
-    if(sliderValueG == 1){
-      myServog.write(70);//訂正済み前
-      rot1time += 1;
-    }
-    if(sliderValueG == -1){
-      myServog.write(110);//訂正済み後ろ
-      rot1time -= 1;
-    }
-  }
-  if(rot1Max = true){
-    if(sliderValueG == 1){
-    myServog.write(70);//訂正済み
-    rot1time += 1;
-    }
-  
-    else{
-       myServog.write(90);//訂正済み
-    }
+//アームのサーボの制御
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-  }
-   if(rot1min = true){
-    if(sliderValueG == -1){
-    myServog.write(110);//訂正済み
-    rot1time -= 1;
-    }
-  
-    else{
-       myServog.write(90);//訂正済み
-    }
-
-  }
-  
-}
-
-void Touch2(){
-  if(rot2time >= 50000){
-    rot2time = 50000;
-    rot2Max = true;
-  }
-  else if(rot2time <= 0){
-    rot2time = 0;
-    rot2min = true;
-  }
-  else{
-    rot2Max = false;
-    rot2min = false;
-
-  }
-
-  if(rot2Max == false  && rot2min == false){
-    
-    if(sliderValueArm == 1){
-      myServoarm.write(70);//訂正済み前
-      rot2time += 1;
-    }
-    if(sliderValueArm == -1){
-      myServoarm.write(110);//訂正済み後ろ
-      rot1time -= 1;
-    }
-  }
-  if(rot2Max = true){
-    if(sliderValueArm == 1){
-    myServoarm.write(70);//訂正済み
-    rot2time += 1;
-    }
-  
-    else{
-       myServoarm.write(90);//訂正済み
-    }
-
-  }
-   if(rot1min = true){
-    if(sliderValueG == -1){
-    myServoarm.write(110);//訂正済み
-    rot1time -= 1;
-    }
-  
-    else{
-       myServoarm.write(90);//訂正済み
-    }
-
-  }
-  
   /*
-  if(rot2time <= 30000){
-    if(sliderValueArm == 1){
-    myServoarm.write(110);
-    rot2time += 1;
-   }
+  if(digitalRead(POTENTIOMHGraund_PIN) == HIGH && sliderValueG == 1){//メーターが上限に達していてforwordのとき
+    //if(sliderValueG == 1){
+      //Blynk.virtualWrite(V2,0);//sliderValueGに送信する
+      sliderValueG = 0;
+    //}
   }
-  else if(rot2time >= 30000){//armサーボを止める
-    myServoarm.write(90);
+  //digitalRead(POTENTIOMLGraund_PIN) == HIGH なら　analogRead(POTENTIOML2_PIN) > 3000になる
+  else if( (digitalRead(POTENTIOMLGraund_PIN) == HIGH  || analogRead(POTENTIOMLGraund_PIN) > 3000 )&& sliderValueG == -1){//上限に達して、さらにforword
+    //if(sliderValueG == -1){
+
+      //Blynk.virtualWrite(V2,0);//sliderValueGに送信する
+      sliderValueG = 0;
+    //}
+  }
+
+  if(sliderValueG == 1){
+    myServoG.write(60); // forward;
+    //Serial.println("servo 84");
+
+  }
+  else if(sliderValueG == -1){
+    myServoG.write(120); // back
+    //Serial.println("servo 105");
+
+  }
+  else{
+    myServoG.write(90); // stop
+    //Serial.println("servo 94");
+  }
+  */
+
+  
+
+//デバック用
+  /*if(oldsliderValueArm != sliderValueArm || oldsliderValueG != sliderValueG ){  
+    //Debug();
   }*/
+}
+
+int HIGHNumG = 0;
+void Auto1(){//grandサーボで前に行く
+  //Serial.println("Auto1");//確認済み
+
+  //Serial.print("HIGHNumG");Serial.println(HIGHNumG);//安定
+
+
+  if(digitalRead(BUTTON_PIN) == LOW){
+
+    HIGHNumG ++;
+    if(HIGHNumG >= 10){HIGHNumG =0; state = auto2;
+    }
+  
+  }else{
+
+    HIGHNumG--;
+    myServoG.write(85); // forward
+    //デバック用
+    //delay(1000);
+    //myServoG.write(120); // forward
+    //delay(1000);
+    //Serial.println(" myServoG.write(80)");
+    //デバック用ここまで
+    if(HIGHNumG <=0){HIGHNumG = 0;}
+  }
+  
+}
+
+void Auto2(){//hand部分を回転させつかむ
+  //Serial.println(sliderValueHN);//確認済み
+  sliderValueHN+=0.04;
+  Serial.println(sliderValueHN);//確認済み
+  if(sliderValueHN <= 180){
+    myServoH.write(sliderValueHN); // forward;
+  }
+  else{
+    state = auto3;
+  }
+}
+
+void Auto3(){//grand部分を後ろにいかせる
+  //メーターが上限に達したら
+  if(digitalRead(POTENTIOMLGraund_PIN) == HIGH){ 
+    state = auto4;//安定動作
+  }
+
+  else{
+     myServoG.write(120); //back;
+  }
+}
+
+void Auto4(){//根本部分を景品の方に回転させる
+  Serial.print("auto4 ");
+  Serial.println(sliderValueBN);
+
+  if(sliderValueBN <= 150){
+    sliderValueBN += 0.02;
+     myServoB.write(sliderValueBN); // forward;
+  }
+  else{
+    state = auto5;
+  }
+}
+
+void Auto5(){//hand部分を回転させはなす
+  Serial.print("auto5 ");
+  //Serial.println(sliderValueHN);
+  sliderValueHN-=0.02;
+
+  if(0 <= sliderValueHN){
+    myServoH.write(sliderValueHN); //はなす
+  }
+  else{
+    state = set1;
+  }
 
 }
 
-void loop(){
-  beforetime = millis();
-  Blynk.run();
+void Set1(){
 
-
-
-  count = count +1 ;
-  if(count % 10000 == 0){
-    Serial.println(String(count));
-    Serial.println("state is "+String(state));
-    Serial.println("rot0 is "+String(rot0));
-    Serial.println("rot1time is "+String(rot1time));
-    Serial.println("rot2time is "+String(rot2time));
-    Serial.println("rot3time is "+String(rot3time));
-    
+   if(sliderValueHN >= 0){
+    sliderValueHN = -0.02;
+    myServoH.write(sliderValueHN);
   }
+
+  if(sliderValueBN >= 45){
+    sliderValueBN -= 0.02;
+     myServoB.write(sliderValueBN); // forward;
+  }
+  else{
+    state = contA;
+  }
+
+}
 
  
-  
-  //bサーボを進める
-  if(state == touch0){
-    Touch0();
+ //int lowNum = 0;
+ //int ButtonNumG = 0;
+
+
+void loop() {
+
+  //デバック用~~~~~~~~~~~~~~~
+  count = count + 1;
+  if(count % 5000 == 0){
+    Serial.println("定期");
+    Debug();
+  }
+  //デバック用ここまで~~~~~~~~~~~~~~~
+
+if(state == set1){
+    Set1();
+  }
+  // サーボBGAの処理
+  if(state == contA){
+    ContA();
+  }
+
+  if(state ==auto1){
+    Auto1();
   }
 
 
-  //groundサーボを進める
-  if(state == touch1){
-    Touch1();
+  if(state ==auto2){
+    Auto2();
+  }
+
+if(state ==auto3){
+    Auto3();
+  }
+
+if(state ==auto4){
+    Auto4();
+  }
+
+if(state ==auto5){
+    Auto5();
   }
 
 
-   //armサーボを進める
-   if(state == touch2){
-    Touch2();
-   }
-
-
-  //autoモードでサーボgを回転
-  if(state == auto1){
-    myServog.write(110);
-    rot1time += 1;
-    
-    if(digitalRead(BUTTON_PIN) == HIGH){
-      
-      state = auto2;
-      Nowstate();
-      //rot3time = 0;
-    }
-     
-  }
-  //サーボhを自動回転
-  if(state == auto2){
-      myServoh.write(180);
-      state = auto3;
-      Nowstate();
-
-  }
-  
-  //サーボbを自動回転
-  if(state == auto3){
-      myServob.write(0);
-  
-      state = auto4;
-      Nowstate();
-
-  //サーボhを自動回転させて離す
-  if(state == auto4){
-    if(rot3time >= 0){
-      myServoh.write(0);
-      state = reset1;
-      Nowstate();
-    }
-  
-    }
-  }
-  if(state == reset1){
-    if(rot1time > 1){
-      myServoh.write(70);
-      rot1time = rot1time-1;
-    }
-
-    if(rot2time > 1){
-      myServoh.write(70);
-      rot2time = rot2time-1;
-    }
-
-    if(rot1time < 10 && rot2time < 10){
-      state = set;
-      Nowstate();
-    }
-  
-  }
-
-  
-}
-
-
-BLYNK_WRITE(V1) {//スタートボタンを押すとグラウンドの方が回転
-  sliderValueB = param.asInt(); 
-  Serial.println("V0 PUSHED");
-
-  if(state == set && sliderValueB == 1){
-      state = touch0;
-      Nowstate();
-    }
-  }
-
-BLYNK_WRITE(V2) {//ボタンを押すとグラウンドの方が回転
-  sliderValueG = param.asInt(); 
-  Serial.println("v0 PUSHED");
-  /*if(sliderValueG == 0){ //リセットボタン
-    state = set;
-    Nowstate();
-    rot1time = 0;
-  }*/
-  
-  if(state == touch0 && (sliderValueG == 1)){
-
-      state = touch1;
-      Nowstate();
-    }
-  }
-
-
-BLYNK_WRITE(V3) {
-  sliderValueArm = param.asInt(); 
-  Serial.println("v1 PUSHED");
-
-  
-  if(sliderValueArm == 0){ //リセットボタン
-    state = set;
-    Nowstate();
-    rot2time = 0;
-  }
-
-  if(state == touch1 && sliderValueArm == 1){
-    state = touch2;
-    Nowstate();
-
-    }
-  }
-
-  BLYNK_WRITE(V0) {
-    sliderValueG2 = param.asInt(); 
-    Serial.println("v2 PUSHED");
-    if(state == touch2 && sliderValueG2 == 1){
-      state = auto1;
-      Nowstate();
-  
-    }
-
-    if(sliderValueG2 == 0){ //リセットボタン
-    state = set;
-    Nowstate();
-  }
 }
 
